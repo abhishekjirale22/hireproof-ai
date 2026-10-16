@@ -1,4 +1,5 @@
 import json
+import os
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -35,6 +36,8 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="HireProof AI", version="1.0.0", description="Recruiter-led interview audio authenticity review. AI output is a signal for human review.", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=[settings.frontend_origin], allow_credentials=True, allow_methods=["GET", "POST", "DELETE", "OPTIONS"], allow_headers=["Authorization", "Content-Type"])
+if os.getenv("VERCEL"):
+    app.frontend("/", directory="frontend/dist")
 
 _rate_events: dict[int, list[float]] = {}
 _credit_lock = Lock()

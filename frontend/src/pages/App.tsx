@@ -124,7 +124,7 @@ function InterviewDetail({ detail, demoMode, onBack, onRefresh, onToast }: any) 
   const [file, setFile] = useState<File | null>(null); const [consent, setConsent] = useState(false); const [busy, setBusy] = useState(false); const [uploadProgress, setUploadProgress] = useState<number | null>(null); const [recording, setRecording] = useState(false); const [note, setNote] = useState(''); const [decision, setDecision] = useState('cleared'); const recorder = useRef<MediaRecorder | null>(null); const parts = useRef<Blob[]>([])
   const analysis = detail.analyses?.[0]; const raw = analysis?.result?.result || analysis?.result || {}; const model = analysis?.result?.model || {}; const verdict = raw.verdict; const resultTone = toneOf(verdict); const speakerVerified = detail.speaker_checks?.some((check: any) => check.operation === 'speaker.verify' && check.status === 'completed')
   async function uploadAndAnalyze() {
-    if (!enabled || !file || !consent) return
+    if (!file || !consent) return
     setBusy(true)
     try {
       const body = new FormData(); body.append('file', file); body.append('consent', 'true')

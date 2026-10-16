@@ -1,4 +1,4 @@
-const API = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
+const API = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? 'http://127.0.0.1:8000' : '')
 localStorage.removeItem('hireproof_token')
 
 export async function api<T = any>(path: string, init: RequestInit = {}): Promise<T> {

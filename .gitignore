@@ -12,3 +12,5 @@ frontend/*.tsbuildinfo
 uploads/*
 !uploads/.gitkeep
 .tools/
+
+.vercel

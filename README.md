@@ -166,6 +166,12 @@ cd frontend
 npm run build
 ```
 
+## Vercel deployment
+
+The root `pyproject.toml` configures Vercel's FastAPI runtime. Its build hook installs and builds the Vite app, which FastAPI serves from the same domain. Deploy with `vercel deploy --prod` from the repository root. The app defaults to demo mode and requires no login.
+
+Vercel's function filesystem is temporary. This demo stores its SQLite database and uploaded audio in the function's temporary directory, so records and recordings can disappear when the function restarts and are not shared reliably between instances. Do not use real candidate data on this deployment. Persistent database and object storage must be configured before using it beyond judging.
+
 ## Privacy and limitations
 
 - Audio processing is gated by explicit consent. The app should be used only with a lawful, informed basis for recruiting audio review.
