@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     max_api_credit_budget: int = Field(default=1500, ge=0)
     low_credit_warning_threshold: int = Field(default=200, ge=0)
     demo_mode: bool = True
+    public_access_mode: bool = True
     detectif_api_key: str = ""
     jwt_secret: str = "change-this-development-secret-before-deployment"
     jwt_expire_minutes: int = 480

@@ -1,11 +1,8 @@
 const API = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
-let token = localStorage.getItem('hireproof_token') || ''
-export function setToken(value: string) { token = value; if (value) localStorage.setItem('hireproof_token', value); else localStorage.removeItem('hireproof_token') }
-export function hasToken() { return Boolean(token) }
+localStorage.removeItem('hireproof_token')
 
 export async function api<T = any>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers)
-  if (token) headers.set('Authorization', `Bearer ${token}`)
   if (init.body && !(init.body instanceof FormData)) headers.set('Content-Type', 'application/json')
   const response = await fetch(`${API}${path}`, { ...init, headers })
   const body = await response.json().catch(() => ({}))
@@ -21,7 +18,6 @@ export function uploadWithProgress<T = any>(path: string, body: FormData, onProg
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest()
     xhr.open('POST', `${API}${path}`)
-    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
     xhr.upload.onprogress = event => { if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100)) }
     xhr.onerror = () => reject(new Error('Upload failed because the API could not be reached.'))
     xhr.onload = () => {

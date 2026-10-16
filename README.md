@@ -1,6 +1,8 @@
 # HireProof AI
 
-**HireProof AI — Fake Job Interview Identity Detection Using AI** is a recruiter-led prototype for reviewing possible synthetic speech in interview recordings. It keeps audio authenticity, speaker matching, and interview integrity as separate checks. An AI result is evidence for a human review, never an automatic hiring decision.
+**HireProof AI — Fake Job Interview Identity Detection Using AI** is an UNCLONE hackathon prototype for the Identity track. It helps interview teams check audio authenticity and, separately, verify a consented reference speaker. An AI result is evidence for human review, never an automatic hiring decision.
+
+The judging workspace opens without a login. It is shared by everyone who has the link; use only consented recordings and non-sensitive demo candidate details. Demo mode is clearly labeled and never calls DetectifAI. Live mode sends an explicitly confirmed request through the backend and may consume the team's hackathon API credits.
 
 ## What the provider API actually supports
 
@@ -19,12 +21,12 @@ The docs do not publish a numeric request-rate quota. The backend therefore hono
 
 ## Features
 
-- Recruiter registration/login with Argon2 password hashing and signed bearer sessions.
-- Recruiter-scoped candidate and interview records.
+- Login-free public judge access, with a shared public workspace for the prototype.
+- Candidate and interview records scoped to the public judge workspace.
 - Candidate audio consent required before audio upload and analysis.
 - Browser microphone recording, replay-before-submit, and supported audio upload.
-- SHA-256 file hash, bounded uploads, extension/content signature checks, duration metadata when Mutagen can decode it, and private local storage.
-- Explicit analysis confirmation; no paid provider call on login, refresh, result view, or demo data.
+- SHA-256 file hash, bounded uploads, extension/content signature checks, duration metadata when Mutagen can decode it, and server-side local storage.
+- Explicit analysis confirmation; no paid provider call on refresh, result view, or demo data.
 - Server-only provider credentials and documented DetectifAI REST operations.
 - Database-backed job records, exact-content caching for the same app analysis configuration, persistent idempotency key for safe user-triggered retries, and a local API usage ledger.
 - Live balance refresh only when the recruiter clicks refresh. Provider calls and charges are recorded only when the API supplies that information; otherwise the UI says unknown.
@@ -38,14 +40,14 @@ The docs do not publish a numeric request-rate quota. The backend therefore hono
 ## Architecture
 
 ```text
-React + TypeScript (Vite) ── authenticated REST ──> FastAPI
+React + TypeScript (Vite) ── public judging REST ──> FastAPI
     recruiter UI / MediaRecorder                      │
                                                       ├── SQLite (SQLAlchemy)
-                                                      ├── private local audio directory
+                                                      ├── server-side local audio directory
                                                       └── DetectifAI REST API (server key only)
 ```
 
-The browser stores only the HireProof session token. Audio moves from the browser to FastAPI, is validated and stored outside the public frontend directory, and reaches DetectifAI only after a recruiter confirms analysis. The app sends short recorded segments after upload; it does not claim live or streaming detection. `GET /v1/operations/{operation_id}` is available in the provider API for retrieving a saved operation if a client loses a response; successful detection normally returns the result directly.
+No account is required to open the judge link. When `PUBLIC_ACCESS_MODE=true`, API access is public and all visitors share one workspace. Do not use real candidate personal information in this prototype. Audio moves from the browser to FastAPI, is validated and stored outside the public frontend directory, and reaches DetectifAI only after the user confirms analysis. The app analyzes submitted recordings; it does not claim live or streaming detection. `GET /v1/operations/{operation_id}` is available in the provider API for retrieving a saved operation if a client loses a response; successful detection normally returns the result directly.
 
 ## Requirements
 
@@ -74,7 +76,7 @@ PowerShell may block activation on a locked-down machine. In that case, use the 
 .\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
 ```
 
-Edit `.env`. Keep `DEMO_MODE=true` for a credit-free run. For real analysis, set `DEMO_MODE=false`, paste the key into `DETECTIF_API_KEY`, and use a long random `JWT_SECRET`. The API key needs the documented scopes for the operations you use: `deepfake:detect`, `speakers:enroll`, `speakers:verify`, and `credits:read`. `DETECTIF_API_BASE_URL` is deliberately not configurable because the published OpenAPI document lists only the production server.
+Edit `.env`. Keep `DEMO_MODE=true` for a credit-free run. Leave `PUBLIC_ACCESS_MODE=true` so judges can open the app without login. For real analysis, set `DEMO_MODE=false` and add the hackathon key to `DETECTIF_API_KEY`; the app keeps it server-side and sends requests only after explicit user confirmation. Since the workspace is public, anyone with its URL can submit paid requests; keep the configured credit cap low and shut the service down after judging. The API key needs the documented scopes for the operations you use: `deepfake:detect`, `speakers:enroll`, `speakers:verify`, and `credits:read`. `DETECTIF_API_BASE_URL` is deliberately not configurable because the published OpenAPI document lists only the production server.
 
 Start the API from the workspace root:
 
@@ -92,12 +94,12 @@ npm install
 npm run dev
 ```
 
-Open <http://127.0.0.1:5173>. Create a recruiter account in the login screen. The SQLite database and uploaded audio directory are created locally.
+Open <http://127.0.0.1:5173>. No login is required. The SQLite database and uploaded audio directory are created locally.
 
 ## Demo workflow
 
 1. Leave `DEMO_MODE=true` in `.env` and start both servers.
-2. Register a recruiter, register a candidate, and record consent.
+2. Register a candidate using synthetic demo details and confirm audio consent.
 3. Create an interview and record a microphone answer or upload a supported recording.
 4. Confirm the analysis action. The result is deliberately an inconclusive demo placeholder and marked simulated. It is not a DetectifAI result and cannot consume API credits.
 5. Add a recruiter review note or delete the audio/candidate.
