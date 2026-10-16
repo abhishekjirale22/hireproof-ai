@@ -8,7 +8,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    database_url: str = f"sqlite:///{os.path.join(tempfile.gettempdir(), 'hireproof.db')}" if os.getenv("VERCEL") else "sqlite:///./hireproof.db"
+    database_url: str = Field(
+        default_factory=lambda: os.getenv("POSTGRES_URL")
+        or (f"sqlite:///{os.path.join(tempfile.gettempdir(), 'hireproof.db')}" if os.getenv("VERCEL") else "sqlite:///./hireproof.db")
+    )
     frontend_origin: str = "http://localhost:5173"
     max_audio_upload_mb: int = Field(default=20, gt=0, le=100)
     max_api_credit_budget: int = Field(default=1500, ge=0)
