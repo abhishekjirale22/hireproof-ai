@@ -25,6 +25,7 @@ The docs do not publish a numeric request-rate quota. The backend therefore hono
 - Candidate and interview records scoped to the public judge workspace.
 - Candidate audio consent required before audio upload and analysis.
 - Browser microphone recording, replay-before-submit, and supported audio upload.
+- Opt-in online-exam voice monitoring: after reference enrollment and fresh consent, the browser submits a 30-second microphone segment about every 30 seconds for documented speaker verification plus synthetic-audio detection. Each segment is a separate, potentially credit-using request; this is periodic sampling, not a live audio stream.
 - SHA-256 file hash, bounded uploads, extension/content signature checks, duration metadata when Mutagen can decode it, and server-side local storage.
 - Explicit analysis confirmation; no paid provider call on refresh, result view, or demo data.
 - Server-only provider credentials and documented DetectifAI REST operations.
@@ -36,6 +37,8 @@ The docs do not publish a numeric request-rate quota. The backend therefore hono
 - Candidate deletion removes local interviews, audio, analysis, and review records; in live mode the associated DetectifAI speaker profile is also deleted when present.
 - Configurable retention cleanup runs when the backend starts. Set `AUDIO_RETENTION_DAYS=0` to disable automatic cleanup; individual audio and candidate deletion are available in the app.
 - Clearly labeled demo mode. Demo output is always `not_sure`, has no model score, and never calls DetectifAI.
+
+Exam monitoring remains off until the student checks the consent box, confirms the credit-using session, and grants microphone access. The monitor shows when the microphone is active, stops on request or after a failed provider call, and skips a segment when an earlier check is still pending. Voice checks can be wrong or bypassed, including by voice-masking tools; they do not prove identity, guarantee that only one person spoke, or automatically fail an exam. A human must review concerning signals and offer an alternative check. Use only consented audio, and do not store real student data in this public, shared hackathon workspace.
 
 ## Architecture
 
@@ -102,13 +105,20 @@ Open <http://127.0.0.1:5173>. No login is required. The SQLite database and uplo
 2. Register a candidate using synthetic demo details and confirm audio consent.
 3. Create an interview and record a microphone answer or upload a supported recording.
 4. Confirm the analysis action. The result is deliberately an inconclusive demo placeholder and marked simulated. It is not a DetectifAI result and cannot consume API credits.
-5. Add a recruiter review note or delete the audio/candidate.
+5. The exam voice monitor is visible but disabled in demo mode; simulated speaker results are never presented as real.
+6. Add a human review note or delete the audio/candidate.
 
 Dashboard sample values are not seeded. Empty counts reflect the current local database.
 
+## Live exam voice monitoring
+
+With `DEMO_MODE=false` and a server-side DetectifAI key, create an interview and enroll the student's separate 15–60 second reference voice sample. The student then opens that interview, accepts the exam-monitor consent, confirms the credit use, and grants microphone permission. The browser sends a 30-second audio segment about every 30 seconds to the existing speaker-verification endpoint with the synthetic-audio check enabled. Each segment is a separate request that can use two provider checks. The monitor is visibly active, can be stopped at any time, skips a segment while a prior request is pending, and pauses if a check fails. This is periodic clip analysis, not continuous streaming. Keep the provider/local credit budget low; long exams can use many checks.
+
+The result indicates only what the configured models returned for those clips. It cannot ensure that the enrolled student was the only person speaking, guarantee detection of a voice mask, or establish misconduct. Do not auto-fail or exclude a student; a human must review signals and provide an alternative verification method.
+
 ## API routes
 
-HireProof's REST API is documented by FastAPI at `/docs`. Authenticated recruiter routes include:
+HireProof's REST API is documented by FastAPI at `/docs`. When `PUBLIC_ACCESS_MODE=true`, routes use one shared public judge identity and require no login:
 
 - `POST /api/candidates`, `GET /api/candidates`, `DELETE /api/candidates/{id}`
 - `POST /api/interviews`, `GET /api/interviews`, `GET /api/interviews/{id}`
