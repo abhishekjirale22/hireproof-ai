@@ -1,0 +1,14 @@
+.env
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+hireproof.db
+backend/hireproof.db
+frontend/node_modules/
+frontend/dist/
+frontend/*.tsbuildinfo
+uploads/*
+!uploads/.gitkeep
+.tools/

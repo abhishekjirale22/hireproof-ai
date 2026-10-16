@@ -1,0 +1,167 @@
+# HireProof AI
+
+**HireProof AI — Fake Job Interview Identity Detection Using AI** is a recruiter-led prototype for reviewing possible synthetic speech in interview recordings. It keeps audio authenticity, speaker matching, and interview integrity as separate checks. An AI result is evidence for a human review, never an automatic hiring decision.
+
+## What the provider API actually supports
+
+The integration follows the [DetectifAI API reference](https://platform.detectif.ai/docs/api/), [audio and limits](https://platform.detectif.ai/docs/audio-and-limits/), [authentication guide](https://platform.detectif.ai/docs/authentication/), and published [OpenAPI document](https://platform.detectif.ai/openapi.json).
+
+| Check | Documented operation | Prototype behavior |
+|---|---|---|
+| Synthetic speech | `POST /v1/deepfake/detect` | Implemented. Multipart field `file`; supported audio; over 4 seconds through 120 seconds. Uses documented verdict, score, threshold, and model fields. |
+| Speaker enrollment | `POST /v1/speakers/enroll` | Implemented as an optional real-mode action. 15–60 seconds, with at least 10 seconds of speech per provider docs. |
+| Speaker verification | `POST /v1/speakers/verify` | Implemented as an optional real-mode action. 3–60 seconds, with at least 2 seconds of speech. May separately request deepfake analysis; provider docs say that uses two checks. |
+| Replay or interview integrity | No supported operation found in the published API | Not checked. The app does not claim replay detection. |
+
+DetectifAI uses `Authorization: Bearer <key>`. The provider publishes `https://platform.detectif.ai` as the API server; this app pins that host and does not forward a secret to an environment-selected URL. Recordings go to the `file` multipart field. Provider max upload is documented as 100 MB; HireProof applies a smaller local limit of 20 MB by default. Provider errors use an `error.code` envelope. Provider docs describe `Idempotency-Key` for detection, enrollment, and verification; retries use the same key, and keys are retained by the provider for 24 hours. The integration does not automatically retry paid operations.
+
+The docs do not publish a numeric request-rate quota. The backend therefore honors `Retry-After` when returned and adds a conservative local limit of 10 analysis/enrollment/verification actions per recruiter per minute. If provider docs or account settings change, verify them before changing the integration.
+
+## Features
+
+- Recruiter registration/login with Argon2 password hashing and signed bearer sessions.
+- Recruiter-scoped candidate and interview records.
+- Candidate audio consent required before audio upload and analysis.
+- Browser microphone recording, replay-before-submit, and supported audio upload.
+- SHA-256 file hash, bounded uploads, extension/content signature checks, duration metadata when Mutagen can decode it, and private local storage.
+- Explicit analysis confirmation; no paid provider call on login, refresh, result view, or demo data.
+- Server-only provider credentials and documented DetectifAI REST operations.
+- Database-backed job records, exact-content caching for the same app analysis configuration, persistent idempotency key for safe user-triggered retries, and a local API usage ledger.
+- Live balance refresh only when the recruiter clicks refresh. Provider calls and charges are recorded only when the API supplies that information; otherwise the UI says unknown.
+- A 1,500-credit local spending cap by default (below the approximate account allowance), checked against the provider's documented current operation price and live balance before paid checks. Raise it in server config only when authorized.
+- Credit reservations are persisted before paid calls to protect the local cap during concurrent work. A timeout keeps the estimate reserved until an explicit same-key retry resolves the provider outcome.
+- Human review notes and decisions are retained separately from the analysis.
+- Candidate deletion removes local interviews, audio, analysis, and review records; in live mode the associated DetectifAI speaker profile is also deleted when present.
+- Configurable retention cleanup runs when the backend starts. Set `AUDIO_RETENTION_DAYS=0` to disable automatic cleanup; individual audio and candidate deletion are available in the app.
+- Clearly labeled demo mode. Demo output is always `not_sure`, has no model score, and never calls DetectifAI.
+
+## Architecture
+
+```text
+React + TypeScript (Vite) ── authenticated REST ──> FastAPI
+    recruiter UI / MediaRecorder                      │
+                                                      ├── SQLite (SQLAlchemy)
+                                                      ├── private local audio directory
+                                                      └── DetectifAI REST API (server key only)
+```
+
+The browser stores only the HireProof session token. Audio moves from the browser to FastAPI, is validated and stored outside the public frontend directory, and reaches DetectifAI only after a recruiter confirms analysis. The app sends short recorded segments after upload; it does not claim live or streaming detection. `GET /v1/operations/{operation_id}` is available in the provider API for retrieving a saved operation if a client loses a response; successful detection normally returns the result directly.
+
+## Requirements
+
+- Python 3.11 or newer.
+- Node.js 20.19+ (or 22.12+) and npm.
+- Windows PowerShell, macOS, or Linux.
+- DetectifAI API key only for real analysis. A key is not needed for the demo.
+
+## Windows setup (VS Code)
+
+From the workspace root, open two terminals.
+
+### 1. Configure the backend
+
+```powershell
+Copy-Item .env.example .env
+py -3 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r backend\requirements.txt
+```
+
+PowerShell may block activation on a locked-down machine. In that case, use the environment's interpreter directly:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
+```
+
+Edit `.env`. Keep `DEMO_MODE=true` for a credit-free run. For real analysis, set `DEMO_MODE=false`, paste the key into `DETECTIF_API_KEY`, and use a long random `JWT_SECRET`. The API key needs the documented scopes for the operations you use: `deepfake:detect`, `speakers:enroll`, `speakers:verify`, and `credits:read`. `DETECTIF_API_BASE_URL` is deliberately not configurable because the published OpenAPI document lists only the production server.
+
+Start the API from the workspace root:
+
+```powershell
+uvicorn app.main:app --app-dir backend --reload --host 127.0.0.1 --port 8000
+```
+
+Open the API docs at <http://127.0.0.1:8000/docs>.
+
+### 2. Start the frontend
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Open <http://127.0.0.1:5173>. Create a recruiter account in the login screen. The SQLite database and uploaded audio directory are created locally.
+
+## Demo workflow
+
+1. Leave `DEMO_MODE=true` in `.env` and start both servers.
+2. Register a recruiter, register a candidate, and record consent.
+3. Create an interview and record a microphone answer or upload a supported recording.
+4. Confirm the analysis action. The result is deliberately an inconclusive demo placeholder and marked simulated. It is not a DetectifAI result and cannot consume API credits.
+5. Add a recruiter review note or delete the audio/candidate.
+
+Dashboard sample values are not seeded. Empty counts reflect the current local database.
+
+## API routes
+
+HireProof's REST API is documented by FastAPI at `/docs`. Authenticated recruiter routes include:
+
+- `POST /api/candidates`, `GET /api/candidates`, `DELETE /api/candidates/{id}`
+- `POST /api/interviews`, `GET /api/interviews`, `GET /api/interviews/{id}`
+- `POST /api/interviews/{id}/audio`, `DELETE /api/interviews/{id}/audio`
+- `POST /api/interviews/{id}/analyze`, `POST /api/interviews/{id}/review`
+- `POST /api/interviews/{id}/speaker-enrollment`, `POST /api/interviews/{id}/speaker-verification`
+- `GET /api/dashboard`, `GET /api/usage`, `POST /api/usage/refresh-balance`
+
+Provider integration is isolated in `backend/app/services/detectif_service.py`. It implements only the confirmed DetectifAI routes: deepfake detect, speaker enroll, speaker verify, credits, usage, and speaker delete. It sends bearer auth and an idempotency key for paid operations, maps provider error codes, applies a bounded 150-second request timeout, and does not retry automatically. A timeout is recorded as failed; a user-triggered retry reuses its stored key.
+
+## Credit handling
+
+- The local 1,500-credit spending cap is a safety setting, not a statement of provider balance.
+- Before a paid action, the backend calls the documented `GET /v1/credits` operation to read current `price_per_operation`, balance, and plan. It blocks a check if the price/balance cannot be confirmed or the local spending cap would be exceeded.
+- Completed usage is recorded with provider-reported `credits.charged`, or the official live `price_per_operation` when a completed response omits the charge field. Unknown remains unknown.
+- A timeout has an unknown outcome, so its estimated operation credits remain reserved; the next explicit retry reuses the same provider idempotency key and settles the reservation.
+- The usage page does not contact DetectifAI automatically. Use **Refresh provider balance** to fetch account state.
+- The docs say deepfake detection, enrollment, and verification consume credits; only completed checks use credits. Verification with `detect_deepfake=true` consumes two checks. The provider balance/price is authoritative; an approximate “2,000 credits” allocation is not encoded as the current balance.
+- Demo mode and pytest mocks never make paid provider calls.
+
+## Tests
+
+Install backend requirements, then run from the workspace root:
+
+```powershell
+pytest backend\tests -q
+```
+
+Normal tests mock provider requests and use an isolated in-memory SQLite database. They cover auth/privacy boundaries, consent, media validation, demo and real-mode provider responses, budget protection, failure handling, duplicate submissions, review audit data, and deletion. A real provider integration test is skipped unless separately enabled. It requires a consented audio file and has an explicit one-credit confirmation gate:
+
+```powershell
+$env:RUN_REAL_DETECTIF_TESTS='1'
+$env:REAL_DETECTIF_CONFIRM='YES_SPEND_ONE_CREDIT'
+$env:DETECTIF_API_KEY='dtf_live_...'
+$env:DETECTIF_TEST_AUDIO_PATH='C:\path\to\consented-audio.wav'
+pytest backend\tests\test_app.py -k real_api_integration -q
+```
+
+That opt-in test checks provider balance before it sends one audio analysis. It can consume a provider credit. Do not run it with audio you do not have permission to process.
+
+Build the frontend with:
+
+```powershell
+cd frontend
+npm run build
+```
+
+## Privacy and limitations
+
+- Audio processing is gated by explicit consent. The app should be used only with a lawful, informed basis for recruiting audio review.
+- Do not use Aadhaar or other unnecessary sensitive identifiers. Do not use a name, email, face, or voice result as conclusive identity proof.
+- Synthetic-speech detection and speaker matching are separate model checks. A speaker similarity is not a percentage and is not conclusive proof of identity.
+- Phone-quality audio can be less reliable, and the provider says synthetic-speech detection is tuned for English. Handle accents, noisy recordings, and inconclusive results with an alternative human verification method.
+- No automatic rejection exists. Recruiters must record a review decision.
+- Replay detection, liveness, facial matching, and active interview continuity are not provided by the documented DetectifAI operations and are shown as unchecked.
+- Files are stored locally in `UPLOAD_DIR`; secure object storage, production-grade key rotation, and deployment hardening are not included in this hackathon prototype. Set a strong JWT secret, configure HTTPS and allowed origins, and apply organizational retention policy before deployment.
+- Retention cleanup currently runs on backend startup, not on a scheduler. Configure `AUDIO_RETENTION_DAYS` and restart the service as needed; manual deletion is immediate.
+- Rate limiting is process-local and intended for a single local prototype, not a horizontally scaled production service.
